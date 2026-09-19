@@ -3,7 +3,7 @@
 // standing rule is that redeploying to a new address means editing one line here,
 // with no dashboard, dotfile, or env-var indirection to keep in sync.
 
-export const CONTRACT_ADDRESS = '0x0000000000000000000000000000000000000000';
+export const CONTRACT_ADDRESS = '0x88DcFBA04A8FE6277e2343CcF41E3E4F69460566';
 
 export const STUDIONET_CONFIG = {
   chainId: '0xF22F', // 61999
