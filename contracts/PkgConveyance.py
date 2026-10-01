@@ -272,7 +272,7 @@ def fetch_registry_doc(ep_fetch, mirror_base, package_name, what):
     """
     url = registry_url_for(mirror_base, package_name)
     response = ep_fetch(url, headers={"Accept": "application/json"})
-    status = getattr(response, "status_code", None)
+    status = getattr(response, "status", None)
     if status == 404:
         return {"_found": False}
     if status is not None and status >= 500:
@@ -713,17 +713,19 @@ class PkgConveyance(gl.Contract):
 
                 if buyer_in and seller_in:
                     outcome = OUTCOME_VERIFIED
-                elif buyer_in and not seller_in:
-                    # Buyer present, seller gone: still a completed transfer by this
-                    # contract's own evidence standard -- the seller relinquished their
-                    # own access on the way out, which most real transfers do. Reported
-                    # as verified, distinctly from a wipe, because the buyer's own
-                    # standing is exactly what a wipe removes and this is the one case
-                    # where it is intact.
-                    outcome = OUTCOME_VERIFIED
                 elif not buyer_in and not seller_in:
                     outcome = OUTCOME_MAINTAINER_WIPE
                 else:
+                    # buyer_in and not seller_in (seller removed themselves once the
+                    # buyer was added -- a real, common transfer pattern, but not what
+                    # this contract's own verdict is defined to check for) falls in
+                    # here alongside not buyer_in and seller_in (not yet added). Both
+                    # are `not_yet_added`: this contract's verdict requires the buyer's
+                    # AND the seller's names to be observed present in the SAME
+                    # consensus read (module docstring's own stated rule), so a caller
+                    # who wants credit for a seller's self-removal must first have that
+                    # removal and the buyer's add both land inside one checked instant
+                    # -- never inferred from the buyer's presence alone.
                     outcome = OUTCOME_NOT_YET_ADDED
 
                 return {
@@ -937,6 +939,11 @@ class PkgConveyance(gl.Contract):
         self._require_state(deal, (ST_LOCKED,), "check_transfer()")
 
         now = self._require_now()
+        if self._at_or_after(now, deal.transfer_deadline):
+            self._reject(
+                "deal %s: transfer_deadline %s has passed; check_transfer() no longer "
+                "verifies this deal, call refund() instead" % (key, deal.transfer_deadline))
+
         if deal.last_check_at != "" and not self._at_or_after(
             now, self._add_seconds(deal.last_check_at, CHECK_COOLDOWN_SECONDS)
         ):
@@ -974,25 +981,26 @@ class PkgConveyance(gl.Contract):
                 "neither the seller's nor the buyer's npm username currently appears "
                 "in the maintainer list; this is not a completed transfer")
             self.deals[key] = deal
-            self._reject_transient(
+            return (
                 "%s deal %s: %s. State remains %s; the transfer deadline still applies."
                 % (TAG_EXPECTED, key, deal.last_check_note, ST_LOCKED))
 
         if outcome == OUTCOME_PACKAGE_GONE:
             deal.last_check_note = "the package is no longer registered on either mirror"
             self.deals[key] = deal
-            self._reject_transient(
-                "deal %s: %s is no longer a registered package; nothing to verify a "
-                "transfer of. State remains %s." % (key, deal.package_name, ST_LOCKED))
+            return (
+                "%s deal %s: %s is no longer a registered package; nothing to verify a "
+                "transfer of. State remains %s."
+                % (TAG_TRANSIENT, key, deal.package_name, ST_LOCKED))
 
         # OUTCOME_NOT_YET_ADDED
         deal.last_check_note = (
             "npm user %r has not yet been added as a maintainer of %s"
             % (deal.buyer_npm_username, deal.package_name))
         self.deals[key] = deal
-        self._reject_transient(
-            "deal %s: %s. State remains %s; retry after the seller completes the add."
-            % (key, deal.last_check_note, ST_LOCKED))
+        return (
+            "%s deal %s: %s. State remains %s; retry after the seller completes the add."
+            % (TAG_TRANSIENT, key, deal.last_check_note, ST_LOCKED))
 
     # ==================================================================================
     # settle / refund / abandon -- the only three places the escrow moves
