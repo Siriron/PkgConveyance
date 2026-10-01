@@ -37,12 +37,16 @@ how this class of contract gets it wrong. PkgConveyance asks them at two separat
    record? A deal opened against a package the seller does not control cannot ever be
    delivered honestly.
 2. **At `check_transfer`**: does the maintainer list now contain the buyer's named
-   username, **and does it still contain the seller's**? The second half is load-bearing.
-   A seller who removes every maintainer except the buyer has completed a transfer; a
-   seller who removes everyone — including the buyer's own pending add — and republishes
-   solo has not, and a check that only looked for the buyer's name could not tell those
-   two outcomes apart. This contract reports `maintainer_wipe` as its own distinct outcome
-   from `not_yet_added` and from `verified`.
+   username, **and does it still contain the seller's, in the same read**? Both must be
+   true for `verified` — this is the actual rule, not a simplification of it. A seller who
+   removes everyone except the buyer has NOT yet satisfied this contract's own verdict (it
+   reports `not_yet_added`, the same outcome as if the buyer had never been added at all,
+   since the seller's own presence is no longer confirmed at the moment the buyer's is); a
+   seller who removes everyone, including the buyer's own pending add, and republishes
+   solo reports the distinct `maintainer_wipe` outcome instead. A check that only looked
+   for the buyer's name could not tell any of these three apart from a genuine two-name
+   transfer, which is why the seller's continued presence is checked at all, in the same
+   round as the buyer's.
 
 ## Two independent registry mirrors, every read
 

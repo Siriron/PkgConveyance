@@ -2,8 +2,8 @@
 
 ## Contract
 
-**Deployed** — StudioNet, `0x88DcFBA04A8FE6277e2343CcF41E3E4F69460566`
-([explorer](https://explorer-studio.genlayer.com/address/0x88DcFBA04A8FE6277e2343CcF41E3E4F69460566)).
+**Deployed** — StudioNet, `0x0E22e987cC239fAf76bf87Ba04d9289C596c1dab`
+([explorer](https://explorer-studio.genlayer.com/address/0x0E22e987cC239fAf76bf87Ba04d9289C596c1dab)).
 `frontend/src/config/chains.ts` already points at this address.
 
 To redeploy or deploy a fresh instance:
@@ -31,16 +31,30 @@ so client-side routes (`/deals/:id`) resolve correctly on a hard refresh.
 
 ## Testing status — honest, not rounded up
 
-**Live-verified as of this writing:** the contract-level static nondet safety audit (see
-`docs/contracts.md`) and a confirmed StudioNet deployment at
-`0x88DcFBA04A8FE6277e2343CcF41E3E4F69460566`. That is not the same claim as a verified
-lifecycle: `open_deal → arm → check_transfer → settle`, and the `refund`/`abandon` paths,
-have **not yet been exercised against this deployment**. Anyone picking this up should run
-the full lifecycle in Run and Debug (or the live frontend) against at least one real,
-currently unclaimed-by-the-tester npm package before treating any path as proven end-to-end.
+**Executed in this repository:** `tests/test_direct.py` runs 28 direct-mode tests against the
+real contract under the GenVM SDK (`pip install "genlayer-test==0.29.2"`, then
+`pytest tests -q -p no:cacheprovider`), and `genvm-lint check contracts/PkgConveyance.py`
+passes. Only the two npm registries are mocked. The tests include regression tests for the
+three defects fixed after steward review (late verification past `transfer_deadline`, failed
+checks losing their cooldown state to a storage rollback, and the seller-presence rule) and for
+the HTTP-status handling fix; each was confirmed to fail against the pre-fix contract.
 
-**Known untested edge case worth checking live:** the `maintainer_wipe` branch requires a
-package that starts with exactly one maintainer (the seller) and is then republished with a
-completely different maintainer set. This is straightforward to construct on a disposable
-test package but was not exercised during development, since doing so against a real
-package on the public npm registry has real, live side effects on that package.
+**Run live on StudioNet (Oct 1 2026), contract `0x0E22e987cC239fAf76bf87Ba04d9289C596c1dab`,
+current code, 5 validators, 0 rotations, every transaction finalized:**
+- `probe_package` (lodash; both mirrors agreed; empty stderr).
+- `open_deal` (1 GEN escrowed, `OFFERED`; empty stderr).
+- `arm` (`LOCKED`, transfer deadline 10 days out; empty stderr).
+- `check_transfer` returning `not_yet_added`, after which `get_deal` showed `checks` = 1,
+  `last_check_at` and `last_check_outcome` persisted (the rollback fix).
+- A second `check_transfer` about three minutes later, which reverted with
+  `[TRANSIENT] deal t1 was checked less than 300 seconds ago ... retry after the cooldown`
+  (the cooldown, now actually enforced because the first check's state persisted).
+- `abandon` (1 GEN returned to the buyer; the contract's refund transfer appears as a child
+  transaction).
+The live run used the public lodash package as a read-only target, so the deal could never
+verify.
+
+**Not proven live:** `VERIFIED` and `settle`, a buyer-present/seller-absent check, `refund`
+past a deadline, the late-verification (`transfer_deadline`) rejection, and the
+`maintainer_wipe` and `package_gone` branches. These are covered only by direct-mode tests with
+mocked registries. Real multi-node behavior beyond the calls above is not proven.
