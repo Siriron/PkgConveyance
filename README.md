@@ -16,7 +16,7 @@
 
 <br />
 
-**[Documentation](./docs/architecture.md)** &nbsp;·&nbsp; **[Smart Contract](./contracts/PkgConveyance.py)** &nbsp;·&nbsp; **[Explorer](https://explorer-studio.genlayer.com/address/0x88DcFBA04A8FE6277e2343CcF41E3E4F69460566)**
+**[Documentation](./docs/architecture.md)** &nbsp;·&nbsp; **[Smart Contract](./contracts/PkgConveyance.py)** &nbsp;·&nbsp; **[Explorer](https://explorer-studio.genlayer.com/address/0x0E22e987cC239fAf76bf87Ba04d9289C596c1dab)**
 
 </div>
 
@@ -90,7 +90,7 @@ add, and republishes solo has not — reported as `maintainer_wipe`, a distinct 
 
 | Network | Address | Explorer |
 |---|---|---|
-| StudioNet | `0x88DcFBA04A8FE6277e2343CcF41E3E4F69460566` | [View](https://explorer-studio.genlayer.com/address/0x88DcFBA04A8FE6277e2343CcF41E3E4F69460566) |
+| StudioNet | `0x0E22e987cC239fAf76bf87Ba04d9289C596c1dab` | [View](https://explorer-studio.genlayer.com/address/0x0E22e987cC239fAf76bf87Ba04d9289C596c1dab) |
 
 </div>
 
@@ -131,18 +131,29 @@ LICENSE                        MIT
 
 ![Audited](https://img.shields.io/badge/nondet%20safety%20audit-passed-brightgreen?style=flat-square)
 ![Deployed](https://img.shields.io/badge/StudioNet%20deploy-confirmed-brightgreen?style=flat-square)
-![Untested](https://img.shields.io/badge/full%20lifecycle-not%20yet%20live--tested-yellow?style=flat-square)
+![Tests](https://img.shields.io/badge/direct--mode%20tests-28%20passing-brightgreen?style=flat-square)
+![Untested](https://img.shields.io/badge/real%20npm%20%2B%20multi--node-not%20tested-yellow?style=flat-square)
 
 </div>
 
 The contract has been checked against every item in this project's mandatory nondet safety
-audit (see `docs/contracts.md`) — one real bug was found and fixed during that process (a
-bound-method call leaking into a `strict_eq` closure). It is **deployed to StudioNet** at
-`0x88DcFBA04A8FE6277e2343CcF41E3E4F69460566`. The full `open_deal → arm → check_transfer →
-settle` lifecycle, and the `refund`/`abandon` paths, have **not yet been exercised live**
-against that deployment — a deployed contract and a live-tested one are different claims,
-and this section will be updated once the lifecycle has actually been run, not before. See
-`docs/deployment.md`'s testing-status section for the exact current state.
+audit (see `docs/contracts.md`) and passes `genvm-lint check`. `tests/test_direct.py` holds 28
+direct-mode tests that execute the real contract under the GenVM SDK, mocking only the two npm
+registries. They cover `open_deal`, `arm`, every `check_transfer` outcome (`verified`,
+`not_yet_added`, `maintainer_wipe`, `package_gone`), the `transfer_deadline` guard, cooldown
+persistence after a failed check, buyer-present/seller-absent delivery, HTTP-error handling,
+mirror disagreement, and `settle`/`refund`/`abandon` with escrow conservation. Run them with
+`pip install "genlayer-test==0.29.2"` then `pytest tests -q -p no:cacheprovider`.
+
+**What the tests do not prove:** real npm registry behavior, or real multi-node consensus
+timing. The mirrors are mocked. Direct mode also does not refresh `gl.message_raw["datetime"]`
+on `warp()`, so the tests set it directly. The contract is deployed to StudioNet at
+`0x0E22e987cC239fAf76bf87Ba04d9289C596c1dab` and was exercised live on this code for
+`probe_package`, `open_deal`, `arm`, `check_transfer` (`not_yet_added`, state persisted, and the
+cooldown revert on an immediate second call) and `abandon`. A live `VERIFIED` and `settle`, the
+late-verification rejection, and the buyer-present/seller-absent rule were not run live; they are
+covered by the direct-mode tests only. See `docs/deployment.md` for exactly what was and was not
+run live.
 
 <br />
 
